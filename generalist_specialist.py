@@ -15,7 +15,7 @@ INCEL_DATA = 'incel_data_counts.csv'
 EMBEDDINGS = '~/AutismMarkers/data_files/reddit-master-vectors.tsv'
 EMBEDDING_METADATA = '~/AutismMarkers/data_files/reddit-master-metadata.tsv'
 MANOSPHERE = ['mgtow', 'braincels', 'incels', 'pussypass', 'theredpill']
-COMMENT_THRESHOLD = 100
+
 def preprocess_community_embeddings():
     metadata = pd.read_csv(EMBEDDING_METADATA, delimiter='\t')
     assert metadata.shape[0] == community_embeddings.shape[0]
@@ -44,22 +44,16 @@ def get_user_embedding(sub_counts, exclude_manosphere=False):
             final_embedding += curr_embedding
     return final_embedding if final_embedding is not None else np.zeros(150)
 
-def preprocess_counts(true_communities, use_prior=False):
-    if use_prior and os.path.isfile(OUTPUT_DIR + 'thresholded_data.csv'):
-        return pd.read_csv(OUTPUT_DIR + 'thresholded_data.csv').set_index('author')
-    df = pd.read_csv(INPUT_DIR + OVERALL_DATA).set_index(['author', 'subreddit'])
+def preprocess_counts(df, true_communities):
     attested_communities = df.index.get_level_values('subreddit').unique()
     aberrant_communities = set(attested_communities).difference(set(true_communities))
     new_df = df.drop(aberrant_communities, level='subreddit')
-    smaller_df = new_df.groupby('author').sum()
-    threshold_df = smaller_df[smaller_df['body'] > COMMENT_THRESHOLD]
-    final_df = new_df[new_df.index.isin(threshold_df.index, level='author')]
-    final_df.to_csv(OUTPUT_DIR + 'thresholded_data.csv')
-    return final_df
+    return new_df
 
 def initialize_all_user_embeddings():
+    overall_counts = pd.read_csv(INPUT_DIR + OVERALL_DATA).set_index(['author', 'subreddit'])
     #TODO: SHOULD NOT NEED THIS LINE BELOW
-    overall_counts = preprocess_counts(list(sub_to_idx.keys()), False)
+    overall_counts = preprocess_counts(overall_counts, list(sub_to_idx.keys()))
     unique_authors = overall_counts.index.get_level_values('author').unique().tolist()
     author_to_embedding = {}
     for author in tqdm.tqdm(unique_authors):
@@ -79,6 +73,8 @@ def main():
     ############################################################################################################
     unique_authors = overall_counts.index.get_level_values('author').unique().tolist()
 
+    ## TODO: GET RID OF RANDOM SAMPLE HERE
+    unique_authors = np.random.choice(unique_authors, 1000, False)
     author_to_embedding = {}
     author_to_GS = {}
     for author in tqdm.tqdm(unique_authors):
@@ -96,7 +92,8 @@ def main():
     user_gs_df.to_csv(OUTPUT_DIR + 'gs_scores.csv')
     return user_embedding_df
 
-
+def get_control_group():
+    
 def generalist_specialist_score(user_embedding, sub_counts):
     keys = list(sub_counts.keys())
     weights = np.array([sub_counts[key] for key in keys]).reshape(-1, 1)
