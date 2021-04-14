@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np 
 import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
-
+import matplotlib.pyplot as plt
 
 ordering = ['body', 'controversiality', 'subreddit', 'created_utc']
 INPUT_DIR = '/ais/hal9000/jai/autism/2552_partitions/'
@@ -59,7 +59,7 @@ def preprocess_counts(true_communities, use_prior=False):
 
 def initialize_all_user_embeddings():
     #TODO: SHOULD NOT NEED THIS LINE BELOW
-    overall_counts = preprocess_counts(list(sub_to_idx.keys()), False)
+    overall_counts = preprocess_counts(list(sub_to_idx.keys()), True)
     unique_authors = overall_counts.index.get_level_values('author').unique().tolist()
     author_to_embedding = {}
     for author in tqdm.tqdm(unique_authors):
@@ -96,6 +96,35 @@ def main():
     user_gs_df.to_csv(OUTPUT_DIR + 'gs_scores.csv')
     return user_embedding_df
 
+def rq2():
+    control = pd.read_csv('rq2.control.csv').set_index(['author', 'subreddit'])
+    treatment = pd.read_csv('rq2.treatment.csv').set_index(['author', 'subreddit'])
+
+
+    unique_control = control.index.get_level_values('author').unique().tolist()
+    unique_treatment = treatment.index.get_level_values('author').unique().tolist()
+
+    control_author_to_GS = {}
+    for author in tqdm.tqdm(unique_control):
+        sub_df = control.loc[author]
+        sub_counts = sub_df['body'].to_dict()
+        user_embedding = get_user_embedding(sub_counts)
+        gs_score = generalist_specialist_score(user_embedding, sub_counts)
+        control_author_to_GS[author] = gs_score
+
+    treatment_author_to_GS = {}
+    for author in tqdm.tqdm(unique_treatment):
+        sub_df = treatment.loc[author]
+        sub_counts = sub_df['body'].to_dict()
+        user_embedding = get_user_embedding(sub_counts)
+        gs_score = generalist_specialist_score(user_embedding, sub_counts)
+        treatment_author_to_GS[author] = gs_score
+
+    control_user_gs_df = pd.DataFrame.from_dict(control_author_to_GS, orient='index')
+    control_user_gs_df.to_csv(OUTPUT_DIR + 'gs_scores.control.csv')
+
+    treatment_user_gs_df = pd.DataFrame.from_dict(treatment_author_to_GS, orient='index')
+    treatment_user_gs_df.to_csv(OUTPUT_DIR + 'gs_scores.treatment.csv')
 
 def generalist_specialist_score(user_embedding, sub_counts):
     keys = list(sub_counts.keys())
@@ -116,15 +145,88 @@ def generalist_specialist_score(user_embedding, sub_counts):
     assert sims.shape == (len(keys), 1)
     weighted_sims = np.multiply(sims, weights)
 
-    return np.sum(weighted_sims) / len(weights)
+    return np.sum(weighted_sims) / np.sum(weights)
 
+def valence_control():
+    ue_df = pd.read_csv(OUTPUT_DIR + 'all_user_embeddings.csv').rename(columns={'Unnamed: 0': 'author'}).set_index('author')
+incel_data = pd.read_csv(INPUT_DIR + INCEL_DATA).set_index(['author', 'subreddit'])
+incel_authors = incel_data.index.get_level_values('author').unique().tolist()
+    incel_embeddings_df = ue_df[ue_df.index.isin(incel_authors)]
+    overall_embeddings_df = ue_df[~ue_df.index.isin(incel_authors)]
+    incel_embeddings = incel_embeddings_df.to_numpy()
+    overall_embeddings = overall_embeddings_df.to_numpy()
+
+    cos_matrix = cosine_similarity(incel_embeddings, overall_embeddings)
+    max_indices = np.argmax(cos_matrix, axis=1)
+
+    assert len(max_indices) == incel_embeddings_df.shape[0]
+
+    matched_control = overall_embeddings_df.iloc[max_indices]
+    matched_control.to_csv('rq1.control.csv')
+    incel_embeddings_df.to_csv('rq1.treatment.csv')
+
+
+def gs_control():
+    thresholded = pd.read_csv(OUTPUT_DIR + 'thresholded_data.csv').set_index('author').groupby('author').sum()
+
+    incel_data = pd.read_csv(INPUT_DIR + INCEL_DATA).set_index(['author', 'subreddit'])
+    incel_authors = incel_data.index.get_level_values('author').unique().tolist()
+    incel_data = thresholded[thresholded.index.isin(incel_authors)]
+    overall_data = thresholded[~thresholded.index.isin(incel_authors)]
+
+    valid_incel_authors = incel_data.groupby('author').sum().index.tolist()
+    overall_authors = overall_data.groupby('author').sum().sample(len(valid_incel_authors)).index.tolist()
+
+
+    thresholded = pd.read_csv(OUTPUT_DIR + 'thresholded_data.csv').set_index('author')
+    treatment = thresholded[thresholded.index.isin(valid_incel_authors)]
+    control = thresholded[thresholded.index.isin(overall_authors)]
+
+    treatment.to_csv('rq2.treatment.csv')
+    control.to_csv('rq2.control.csv')
+
+
+
+def rq2_viz():
+control = pd.read_csv(OUTPUT_DIR + 'gs_scores.control.csv')
+treatment = pd.read_csv(OUTPUT_DIR + 'gs_scores.treatment.csv')
+    plt.hist(control['0'].tolist())
+    plt.xlim(0.5, 1.5)
+    plt.ylim(0, 1500)
+    plt.savefig('control.rq2.png')
+    plt.clf()
+    plt.hist(treatment['0'].tolist())
+    plt.xlim(0.5, 1.5)
+    plt.ylim(0, 1500)
+    plt.savefig('treatment.rq2.png')
+    plt.clf()
+
+    #TODO: CONTROL FOR VOLUME OF ACTIVITY
+
+    #TODO: FIGURE OUT WHY NOT ALL AUTHORS ARE IN THRESHOLDED DATA
 
 
 
 if __name__ == "__main__":
-    initialize_all_user_embeddings()
+    # initialize_all_user_embeddings()
+    # valence_control()
+    # gs_control()
+    rq2_viz()
     # user_embedding_df = main()
 
+
+
+# TODO:
+# Get control group for GS scores
+# Run GS code
+# plot distributions
+# run two sample KS test
+
+# Load valence code
+# Run through whole dataset and find posts from our user set
+# Compare the valence scores across the two and get cohen's d
+
+# All of RQ3
 
 
 

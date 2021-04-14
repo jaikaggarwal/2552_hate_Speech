@@ -11,7 +11,7 @@ filenames = [filename for filename in filenames if '2014' in filename]
 
 for filename in tqdm.tqdm(filenames):
     f = gzip.open(INPUT_DIR + filename)
-    with open(OUTPUT_DIR + filename[:-3] + '.txt    ', 'w') as fout:
+    with open(OUTPUT_DIR + filename[:-3] + '.txt', 'w') as fout:
         for line in tqdm.tqdm(f):
             try:
                 data_dict = json.loads(line.decode('utf-8'))
