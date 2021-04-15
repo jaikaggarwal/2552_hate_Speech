@@ -14,7 +14,7 @@ import argparse
 from utils import Serialization
 from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
-from scipy.stats import wilcoxon
+from scipy.stats import wilcoxon, ttest_rel
 import matplotlib.pyplot as plt
 tqdm.pandas()
 
@@ -211,7 +211,7 @@ def data_analysis():
     # Find the number of unique matches
     # Take the set of unique matches and use them as control and treatment respectively (break ties by higher cos sim)
 
-    ue_df = pd.read_csv(OUTPUT_DIR + 'all_user_embeddings.csv').rename(columns={'Unnamed: 0': 'author'}).set_index('author')
+    ue_df = pd.read_csv('/ais/hal9000/jai/autism/all_user_embeddings.csv').rename(columns={'Unnamed: 0': 'author'}).set_index('author')
     treatment_authors = treatment_data['author'].unique().tolist()
     control_authors = control_data['author'].unique().tolist()
     assert len(set(treatment_authors).intersection(control_authors)) == 0
@@ -244,9 +244,59 @@ def data_analysis():
     ordered_control = control_mean_valence.loc[control_order]['valence']
     ordered_treatment = treatment_mean_valence.loc[treatment_order]['valence']
 
-    print(wilcoxon(ordered_control, ordered_treatment))
+    print(ttest_rel(ordered_control, ordered_treatment))
     cohens_d = (np.mean(ordered_control) - np.mean(ordered_treatment)) / (np.sqrt(((np.std(ordered_control) ** 2 + np.std(ordered_treatment) ** 2) / 2)))
     print(cohens_d)
+    print(np.mean(ordered_control))
+    print(np.mean(ordered_treatment))
+
+    plt.hist(ordered_control)
+    plt.title("Valence Scores of Control Authors")
+    plt.xlabel("Valence Scores")
+    plt.xlim(0.3, 0.6)
+    plt.ylabel("Frequency")
+    plt.ylim(0, 1800)
+    plt.savefig("rq1.control.v2.png")
+    plt.clf()
+
+    plt.hist(ordered_treatment)
+    plt.title("Valence Scores of Treatment Authors")
+    plt.xlabel("Valence Scores")
+    plt.xlim(0.3, 0.6)
+    plt.ylabel("Frequency")
+    plt.ylim(0, 1800)
+    plt.savefig("rq1.treatment.v2.png")
+    plt.clf()
+
+    control_contra_df = pd.read_csv('rq1.control.v2.csv')
+    treatment_contra_df = pd.read_csv('rq1.treatment.v2.csv')
+
+    control_contra_scores = control_contra_df.groupby('author').mean().loc[control_order]['controversiality']
+    treatment_contra_scores = treatment_contra_df.groupby('author').mean().loc[treatment_order]['controversiality']
+
+    print(wilcoxon(control_contra_scores, treatment_contra_scores))
+    cohens_d = (np.mean(control_contra_scores) - np.mean(treatment_contra_scores)) / (np.sqrt(((np.std(control_contra_scores) ** 2 + np.std(treatment_contra_scores) ** 2) / 2)))
+    print(cohens_d)
+    print(np.mean(control_contra_scores))
+    print(np.mean(treatment_contra_scores))
+
+    plt.hist(control_contra_scores)
+    plt.title("Controversiality Scores of Control Authors")
+    plt.xlabel("Controversiality Scores")
+    plt.xlim(0, 0.2)
+    plt.ylabel("Frequency")
+    plt.ylim(0, 1600)
+    plt.savefig("rq1.control.v2.contra.png")
+    plt.clf()
+
+    plt.hist(treatment_contra_scores)
+    plt.title("Controversiality Scores of Treatment Authors")
+    plt.xlabel("Controversiality Scores")
+    plt.xlim(0, 0.2)
+    plt.ylabel("Frequency")
+    plt.ylim(0, 1600)
+    plt.savefig("rq1.treatment.v2.contra.png")
+    plt.clf()
 
 
 

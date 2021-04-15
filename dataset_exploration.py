@@ -4,44 +4,65 @@ import numpy as np
 import tqdm
 
 preordering = ['author', 'body', 'controversiality', 'subreddit', 'created_utc']
-ordering = ['body', 'controversiality', 'created_utc']
+ordering = ['body']#, 'controversiality', 'created_utc']
 INPUT_DIR = '/ais/hal9000/jai/autism/2552_partitions/'
 dtypes = {'author': 'str', 'subreddit': 'str', 'created_utc': 'int64', 'controversiality': 'int64', 'body': 'str'}
 
-OVERALL_DATA = 'new_overall_data_counts.csv'
-INCEL_DATA = 'new_incel_data_counts.csv'
+OVERALL_DATA = 'overall_data_counts.csv'
+INCEL_DATA = 'incel_data_counts.csv'
 
 def df_filter(df):
     df = df.dropna()
-    sample = df.groupby('author').sample(frac=0.1)
-    sample['len'] = sample['body'].apply(lambda x: len(x.split(" ")))
-    longer_sample = sample[sample['len'] > 10][preordering]
+    # sample = df.groupby('author').sample(frac=0.1)
+    df['len'] = df['body'].apply(lambda x: len(x.split(" ")))
+    longer_sample = df[df['len'] > 10][preordering]
     return longer_sample
 
 def get_overall_user_activity():
-    if os.path.isfile(INPUT_DIR + OVERALL_DATA):
-        return pd.read_csv(INPUT_DIR + OVERALL_DATA)
+    # if os.path.isfile(INPUT_DIR + OVERALL_DATA):
+    #     return pd.read_csv(INPUT_DIR + OVERALL_DATA)
     files = os.listdir(INPUT_DIR)
-    files = [filename for filename in files if ('INCEL_DATA' not in filename) and ('rq1' in filename)]
+    # files = [filename for filename in files if ('INCEL_DATA' not in filename) and ('rq1' in filename)]
+    files = [filename for filename in files if ('INCEL_DATA' not in filename) and ('rq1' not in filename) and ('RC' in filename)]
+    files.sort()
+    files = files[3:-2]
     print(files)
     print(len(files))
-    base = df_filter(pd.read_csv(INPUT_DIR + files[0])).set_index(['author', 'subreddit'])[ordering]
-    
+    # base = df_filter(pd.read_csv(INPUT_DIR + files[0])).set_index(['author', 'subreddit'])[ordering]
+    base = pd.read_csv(INPUT_DIR + files[0]).dropna().set_index(['author', 'subreddit'])[ordering]
     #add all new files to base
     for filename in tqdm.tqdm(files[1:]):
         try:
-            filtered_df = df_filter(pd.read_csv(INPUT_DIR + filename))
-            base = pd.concat([base, filtered_df.set_index(['author', 'subreddit'])[ordering]])
+            filtered_df = pd.read_csv(INPUT_DIR + filename).dropna()
+            # base = pd.concat([base, filtered_df.set_index(['author', 'subreddit'])[ordering]])
         except:
             continue
-        # base = base.add(filtered_df.set_index(['author', 'subreddit'])[ordering], fill_value=0)
-    print(base.shape)
+        base = base.add(filtered_df.set_index(['author', 'subreddit'])[ordering], fill_value=0)
+    #     if '02' in filename:
+    #         new = base.groupby('author').count()
+    #         if '2015' in filename:
+    #             print("TRIMMING")
+    #             print(new.shape)
+    #             new = new[new['body'] > 1]
+    #             print(new.shape)
+    #         if '2016' in filename:
+    #             print("TRIMMING")
+    #             print(new.shape)
+    #             new = new[new['body'] > 1]
+    #             print(new.shape)
+    #         if '2017' in filename:
+    #             print("TRIMMING")
+    #             print(new.shape)
+    #             new = new[new['body'] > 1]
+    #             print(new.shape)
+    #         base = base[base.index.isin(new.index, level='author')]
+    # print(base.shape)
     base.to_csv(INPUT_DIR + OVERALL_DATA)
     return base
 
 def get_incel_user_activity():
-    if os.path.isfile(INPUT_DIR + INCEL_DATA):
-        return pd.read_csv(INPUT_DIR + INCEL_DATA)
+    # if os.path.isfile(INPUT_DIR + INCEL_DATA):
+    #     return pd.read_csv(INPUT_DIR + INCEL_DATA)
     files = os.listdir(INPUT_DIR)
     files = [filename for filename in files if 'INCEL_DATA' in filename]
     base = pd.read_csv(INPUT_DIR + files[0]).dropna()[preordering].astype(dtypes).groupby(['author', 'subreddit']).nunique()[ordering]
@@ -75,7 +96,7 @@ def data_split():
     print(data.shape)
     print("FREQUENT COMMENTORS")
     data_agg = data.groupby('author').count()
-    data = data[data['author'].isin(data_agg[data_agg['subreddit'] > 99].index.tolist())]
+    data = data[data['author'].isin(data_agg[data_agg['body'] > 99].index.tolist())]
     print(data.shape)
     incel_data = pd.read_csv(INPUT_DIR + INCEL_DATA).set_index(['author', 'subreddit'])
     incel_authors = incel_data.index.get_level_values('author').unique().tolist()
@@ -90,8 +111,8 @@ def data_split():
     print("INCEL AUTHORS")
     print(incel_data['author'].nunique())
 
-    control_data.to_csv('rq1.control.v2.csv')
-    incel_data.to_csv('rq1.treatment.v2.csv')
+    # control_data.to_csv('rq2.control.v2.csv')
+    # incel_data.to_csv('rq2.treatment.v2.csv')
 
 
 

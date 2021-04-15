@@ -4,6 +4,7 @@ import numpy as np
 import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
 import matplotlib.pyplot as plt
+from scipy.stats import wilcoxon
 
 ordering = ['body', 'controversiality', 'subreddit', 'created_utc']
 INPUT_DIR = '/ais/hal9000/jai/autism/2552_partitions/'
@@ -97,8 +98,8 @@ def main():
     return user_embedding_df
 
 def rq2():
-    control = pd.read_csv('rq2.control.csv').set_index(['author', 'subreddit'])
-    treatment = pd.read_csv('rq2.treatment.csv').set_index(['author', 'subreddit'])
+    control = pd.read_csv('rq1.control.v2.csv').groupby(['author', 'subreddit']).count()
+    treatment = pd.read_csv('rq1.treatment.v2.csv').groupby(['author', 'subreddit']).count()
 
 
     unique_control = control.index.get_level_values('author').unique().tolist()
@@ -121,10 +122,10 @@ def rq2():
         treatment_author_to_GS[author] = gs_score
 
     control_user_gs_df = pd.DataFrame.from_dict(control_author_to_GS, orient='index')
-    control_user_gs_df.to_csv(OUTPUT_DIR + 'gs_scores.control.csv')
+    control_user_gs_df.to_csv(OUTPUT_DIR + 'gs_scores.control.v2.csv')
 
     treatment_user_gs_df = pd.DataFrame.from_dict(treatment_author_to_GS, orient='index')
-    treatment_user_gs_df.to_csv(OUTPUT_DIR + 'gs_scores.treatment.csv')
+    treatment_user_gs_df.to_csv(OUTPUT_DIR + 'gs_scores.treatment.v2.csv')
 
 def generalist_specialist_score(user_embedding, sub_counts):
     keys = list(sub_counts.keys())
@@ -147,10 +148,74 @@ def generalist_specialist_score(user_embedding, sub_counts):
 
     return np.sum(weighted_sims) / np.sum(weights)
 
+def gs_data_analysis():
+    control = pd.read_csv('rq1.control.v2.csv')
+    treatment = pd.read_csv('rq1.treatment.v2.csv')
+    cagg = control.groupby(['author']).count()
+    tagg = treatment.groupby(['author']).count()
+    
+    freq, bins = np.histogram(cagg.sort_values('body')['body'], 
+    bins=[100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 6000])
+    print(freq)
+    print(bins)
+    # freq, bins = np.histogram(tagg.sort_values('body')['body'], 
+    # bins=[100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 6000])
+    # print(freq)
+    # print(bins)
+    new_tagg = None
+    for i in range(len(bins)-1):
+        sub_tagg =  tagg[(tagg['body']<bins[i+1]) & (tagg['body']>=bins[i])]
+        sub_tagg = sub_tagg.sample(freq[i])
+        # print(freq[i])
+        # print(sub_tagg.shape)
+        if new_tagg is None:
+            new_tagg = sub_tagg
+
+        else:
+            new_tagg = pd.concat([new_tagg, sub_tagg])
+    new_cagg = cagg[cagg['body'] < 6000].sort_values('body')
+    new_tagg = new_tagg.sort_values('body')
+    print(new_cagg.shape)
+    print(new_tagg.shape)
+
+    control_order = new_cagg.index
+    treatment_order = new_tagg.index
+
+    cgs = pd.read_csv(OUTPUT_DIR + 'gs_scores.control.v2.csv').set_index('Unnamed: 0')
+    tgs = pd.read_csv(OUTPUT_DIR + 'gs_scores.treatment.v2.csv').set_index('Unnamed: 0')
+
+    cgs_scores = cgs.loc[control_order]['0']
+    tgs_scores = tgs.loc[treatment_order]['0']
+    print(wilcoxon(cgs_scores, tgs_scores))
+    cohens_d = (np.mean(cgs_scores) - np.mean(tgs_scores)) / (np.sqrt(((np.std(cgs_scores) ** 2 + np.std(tgs_scores) ** 2) / 2)))
+    print(cohens_d)
+    print(np.mean(cgs_scores))
+    print(np.mean(tgs_scores))
+    plt.hist(cgs_scores)
+    plt.xlabel("GS Scores")
+    plt.ylabel("Frequency")
+    plt.title("GS Scores of Control Authors")
+    plt.xlim(0.5, 1.2)
+    plt.ylim(0, 2000)
+    plt.savefig('control.rq2.v2.png')
+    plt.clf()
+    plt.hist(tgs_scores)
+    plt.xlabel("GS Scores")
+    plt.ylabel("Frequency")
+    plt.title("GS Scores of Treatment Authors")
+    plt.xlim(0.5, 1.2)
+    plt.ylim(0, 2000)
+    plt.savefig('treatment.rq2.v2.png')
+    plt.clf()
+
+
+
+
+
 def valence_control():
     ue_df = pd.read_csv(OUTPUT_DIR + 'all_user_embeddings.csv').rename(columns={'Unnamed: 0': 'author'}).set_index('author')
-incel_data = pd.read_csv(INPUT_DIR + INCEL_DATA).set_index(['author', 'subreddit'])
-incel_authors = incel_data.index.get_level_values('author').unique().tolist()
+    incel_data = pd.read_csv(INPUT_DIR + INCEL_DATA).set_index(['author', 'subreddit'])
+    incel_authors = incel_data.index.get_level_values('author').unique().tolist()
     incel_embeddings_df = ue_df[ue_df.index.isin(incel_authors)]
     overall_embeddings_df = ue_df[~ue_df.index.isin(incel_authors)]
     incel_embeddings = incel_embeddings_df.to_numpy()
@@ -188,8 +253,8 @@ def gs_control():
 
 
 def rq2_viz():
-control = pd.read_csv(OUTPUT_DIR + 'gs_scores.control.csv')
-treatment = pd.read_csv(OUTPUT_DIR + 'gs_scores.treatment.csv')
+    control = pd.read_csv(OUTPUT_DIR + 'gs_scores.control.csv')
+    treatment = pd.read_csv(OUTPUT_DIR + 'gs_scores.treatment.csv')
     plt.hist(control['0'].tolist())
     plt.xlim(0.5, 1.5)
     plt.ylim(0, 1500)
@@ -211,7 +276,8 @@ if __name__ == "__main__":
     # initialize_all_user_embeddings()
     # valence_control()
     # gs_control()
-    rq2_viz()
+    # rq2()
+    gs_data_analysis()
     # user_embedding_df = main()
 
 
