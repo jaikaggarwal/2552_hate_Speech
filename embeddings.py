@@ -191,6 +191,7 @@ def gs_data_analysis():
     print(cohens_d)
     print(np.mean(cgs_scores))
     print(np.mean(tgs_scores))
+    plt.rcParams.update({'font.size': 22})
     plt.hist(cgs_scores)
     plt.xlabel("GS Scores")
     plt.ylabel("Frequency")

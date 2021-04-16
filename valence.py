@@ -244,12 +244,14 @@ def data_analysis():
     ordered_control = control_mean_valence.loc[control_order]['valence']
     ordered_treatment = treatment_mean_valence.loc[treatment_order]['valence']
 
+    print("MEAN SIMILARITY")
+    print(np.mean(most_sim_data))
     print(ttest_rel(ordered_control, ordered_treatment))
     cohens_d = (np.mean(ordered_control) - np.mean(ordered_treatment)) / (np.sqrt(((np.std(ordered_control) ** 2 + np.std(ordered_treatment) ** 2) / 2)))
     print(cohens_d)
     print(np.mean(ordered_control))
     print(np.mean(ordered_treatment))
-
+    plt.rcParams.update({'font.size': 22})
     plt.hist(ordered_control)
     plt.title("Valence Scores of Control Authors")
     plt.xlabel("Valence Scores")
@@ -279,6 +281,8 @@ def data_analysis():
     print(cohens_d)
     print(np.mean(control_contra_scores))
     print(np.mean(treatment_contra_scores))
+
+    print(len(control_contra_scores))
 
     plt.hist(control_contra_scores)
     plt.title("Controversiality Scores of Control Authors")
